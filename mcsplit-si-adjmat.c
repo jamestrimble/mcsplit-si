@@ -41,6 +41,7 @@ static struct argp_option options[] = {
     {"verbose", 'v', 0, 0, "Verbose output"},
     {"dimacs", 'd', 0, 0, "Read DIMACS format"},
     {"lad", 'l', 0, 0, "Read LAD format"},
+    {"VF", 'V', 0, 0, "Read vf format"},
     {"directed", 'i', 0, 0, "Use directed graphs"},
     {"enumerate", 'e', 0, 0, "Count solutions"},
     {"labelled", 'a', 0, 0, "Use edge and vertex labels"},
@@ -54,6 +55,7 @@ static struct {
     bool verbose;
     bool dimacs;
     bool lad;
+    bool vf;
     bool directed;
     bool enumerate;
     bool edge_labelled;
@@ -93,6 +95,11 @@ static error_t parse_opt (int key, char *arg, struct argp_state *state) {
             if (arguments.dimacs)
                 fail("The -d and -l options cannot be used together.\n");
             arguments.lad = true;
+            break;
+        case 'V':
+            arguments.vf = true;
+            arguments.vertex_labelled = true;
+            arguments.directed = true;
             break;
         case 'q':
             arguments.quiet = true;
@@ -594,7 +601,8 @@ int main(int argc, char** argv) {
     set_default_arguments();
     argp_parse(&argp, argc, argv, 0, 0, 0);
 
-    char format = arguments.dimacs ? 'D' : arguments.lad ? 'L' : 'B';
+    char format = arguments.dimacs ? 'D' : arguments.lad ? 'L' :
+            arguments.vf ? 'V' : 'B';
     struct Graph g0 = readGraph(arguments.filename1, format, arguments.directed,
             arguments.edge_labelled, arguments.vertex_labelled);
     struct Graph g1 = readGraph(arguments.filename2, format, arguments.directed,

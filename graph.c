@@ -93,6 +93,43 @@ struct Graph readDimacsGraph(char* filename, bool directed, bool vertex_labelled
     return g;
 }
 
+struct Graph readVfGraph(char* filename) {
+    bool directed = true;
+
+    struct Graph g(0);
+    FILE* f;
+
+    if ((f=fopen(filename, "r"))==NULL)
+        fail("Cannot open file");
+
+    int nvertices = 0;
+    int v, w;
+
+    if (fscanf(f, "%d", &nvertices) != 1)
+        fail("Number of vertices not read correctly.\n");
+    g = Graph(nvertices);
+
+    for (int i=0; i<nvertices; i++) {
+        int label;
+        if (fscanf(f, "%d %d", &v, &label) != 2)
+            fail("Label not read correctly.\n");
+        g.label[v] = label;
+    }
+    for (int i=0; i<nvertices; i++) {
+        int edge_count;
+        if (fscanf(f, "%d", &edge_count) != 1)
+            fail("Number of edges not read correctly.\n");
+        for (int j=0; j<edge_count; j++) {
+            if (fscanf(f, "%d %d", &v, &w) != 2)
+                fail("An edge was not read correctly.\n");
+            add_edge(g, v, w, directed);
+        }
+    }
+
+    fclose(f);
+    return g;
+}
+
 struct Graph readLadGraph(char* filename, bool directed) {
     struct Graph g(0);
     FILE* f;
@@ -173,7 +210,8 @@ struct Graph readBinaryGraph(char* filename, bool directed, bool edge_labelled,
 
 struct Graph readGraph(char* filename, char format, bool directed, bool edge_labelled, bool vertex_labelled) {
     struct Graph g(0);
-    if (format=='D') g = readDimacsGraph(filename, directed, vertex_labelled);
+    if (format=='V') g = readVfGraph(filename);
+    else if (format=='D') g = readDimacsGraph(filename, directed, vertex_labelled);
     else if (format=='L') g = readLadGraph(filename, directed);
     else if (format=='B') g = readBinaryGraph(filename, directed, edge_labelled, vertex_labelled);
     else fail("Unknown graph format\n");
