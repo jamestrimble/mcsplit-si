@@ -1007,7 +1007,7 @@ int main(int argc, char** argv) {
 
 
     cout << "Nodes:                      " << nodes << endl;
-    cout << "CPU time (ms):              " << time_elapsed << endl;
+    cout << "Time (ms):                  " << time_elapsed << endl;
     if (aborted) {
         cout << "TIMEOUT" << endl;
     } else {
