@@ -6,7 +6,6 @@
 #include <algorithm>
 #include <iostream>
 #include <string>
-#include <unordered_set>
 
 constexpr int BITS_PER_UNSIGNED_INT (CHAR_BIT * sizeof(unsigned int));
 
@@ -76,6 +75,20 @@ struct SparseGraph readDimacsGraph(char* filename, bool directed, bool vertex_la
     return g;
 }
 
+void deduplicate_adj_lists(SparseGraph & g, bool directed)
+{
+    for (int i=0; i<g.n; i++) {
+        auto & vec = g.adj_lists[i];
+        std::sort( vec.begin(), vec.end() );
+        vec.erase( std::unique( vec.begin(), vec.end() ), vec.end() );
+        if (directed) {
+            auto & vec = g.in_edge_lists[i];
+            std::sort( vec.begin(), vec.end() );
+            vec.erase( std::unique( vec.begin(), vec.end() ), vec.end() );
+        }
+    }
+}
+
 struct SparseGraph readLadGraph(char* filename, bool directed) {
     struct SparseGraph g(0);
     FILE* f;
@@ -90,35 +103,18 @@ struct SparseGraph readLadGraph(char* filename, bool directed) {
         fail("Number of vertices not read correctly.\n");
     g = SparseGraph(nvertices);
 
-    // If edge (v,w) has been seen, then edges_seen will contain v * nvertices + w.
-    std::unordered_set<unsigned long long> edges_seen;
-
     for (int i=0; i<nvertices; i++) {
         int edge_count;
         if (fscanf(f, "%d", &edge_count) != 1)
             fail("Number of edges not read correctly.\n");
-        if (directed) {
-            for (int j=0; j<edge_count; j++) {
-                if (fscanf(f, "%d", &w) != 1)
-                    fail("An edge was not read correctly.\n");
-                if (edges_seen.find(i * nvertices + w) == edges_seen.end()) {
-                    edges_seen.insert(i * nvertices + w);
-                    add_edge(g, i, w, true);
-                }
-            }
-        } else {
-            for (int j=0; j<edge_count; j++) {
-                if (fscanf(f, "%d", &w) != 1)
-                    fail("An edge was not read correctly.\n");
-                int lo = std::min(i, w);
-                int hi = std::max(i, w);
-                if (edges_seen.find(lo * nvertices + hi) == edges_seen.end()) {
-                    edges_seen.insert(lo * nvertices + hi);
-                    add_edge(g, i, w, false);
-                }
-            }
+        for (int j=0; j<edge_count; j++) {
+            if (fscanf(f, "%d", &w) != 1)
+                fail("An edge was not read correctly.\n");
+            add_edge(g, i, w, directed);
         }
     }
+
+    deduplicate_adj_lists(g, directed);
 
     fclose(f);
     return g;
@@ -144,9 +140,6 @@ struct SparseGraph readGfdGraph(char* filename) {
         fail("Number of vertices not read correctly.\n");
     g = SparseGraph(nvertices);
 
-    // If edge (v,w) has been seen, then edges_seen will contain v * nvertices + w.
-    std::unordered_set<unsigned long long> edges_seen;
-
     for (int i=0; i<nvertices; i++) {
         int label;
         if (fscanf(f, "%d", &label) != 1)
@@ -159,11 +152,10 @@ struct SparseGraph readGfdGraph(char* filename) {
     for (int j=0; j<edge_count; j++) {
         if (fscanf(f, "%d %d", &v, &w) != 2)
             fail("An edge was not read correctly.\n");
-        if (edges_seen.find(v * nvertices + w) == edges_seen.end()) {
-            edges_seen.insert(v * nvertices + w);
-            add_edge(g, v, w, directed);
-        }
+        add_edge(g, v, w, directed);
     }
+
+    deduplicate_adj_lists(g, directed);
 
     fclose(f);
     return g;
@@ -185,9 +177,6 @@ struct SparseGraph readVfGraph(char* filename) {
         fail("Number of vertices not read correctly.\n");
     g = SparseGraph(nvertices);
 
-    // If edge (v,w) has been seen, then edges_seen will contain v * nvertices + w.
-    std::unordered_set<unsigned long long> edges_seen;
-
     for (int i=0; i<nvertices; i++) {
         int label;
         if (fscanf(f, "%d %d", &v, &label) != 2)
@@ -201,12 +190,11 @@ struct SparseGraph readVfGraph(char* filename) {
         for (int j=0; j<edge_count; j++) {
             if (fscanf(f, "%d %d", &v, &w) != 2)
                 fail("An edge was not read correctly.\n");
-            if (edges_seen.find(v * nvertices + w) == edges_seen.end()) {
-                edges_seen.insert(v * nvertices + w);
-                add_edge(g, v, w, directed);
-            }
+            add_edge(g, v, w, directed);
         }
     }
+
+    deduplicate_adj_lists(g, directed);
 
     fclose(f);
     return g;
