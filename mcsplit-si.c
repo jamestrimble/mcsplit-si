@@ -318,6 +318,19 @@ struct Workspace {
     }
     vector<int> left_swap_vv;
     vector<int> right_swap_vv;
+    vector<int> vv0;
+    vector<int> vv1;
+    vector<int> vv0_inverse;
+    vector<int> vv1_inverse;
+    Workspace(vector<int> & vv0, vector<int> & vv1) : vv0(vv0), vv1(vv1), vv0_inverse(vv0.size()), vv1_inverse(vv1.size())
+    {
+        for (unsigned i=0; i<vv0.size(); i++) {
+            vv0_inverse[vv0[i]] = i;
+        }
+        for (unsigned i=0; i<vv1.size(); i++) {
+            vv1_inverse[vv1[i]] = i;
+        }
+    }
 private:
     NewBidomain *bd_free_list = nullptr;
     std::list<vector<NewBidomain>> bd_memory_pools;
@@ -393,7 +406,26 @@ int calc_bound(Workspace & workspace, BDLL & bdll, const SparseGraph & g0, const
     return bound;
 }
 
-BdIt select_bidomain_heur_A(BDLL & domains)
+// Return the position in vv0 of the pattern vertex on which we'd like to branch from the range [begin,end)
+int find_best_v_score(It begin, It end, Workspace & workspace)
+{
+    int result_score = workspace.vv0_inverse[*begin];
+    for (It it=std::next(begin); it!=end; it++) {
+        int v_score = workspace.vv0_inverse[*it];
+        if (v_score < result_score) {
+            result_score = v_score;
+        }
+    }
+    return result_score;
+}
+
+// Return the pattern vertex on which we'd like to branch from the range [begin,end)
+int find_best_v(It begin, It end, Workspace & workspace)
+{
+    return workspace.vv0[find_best_v_score(begin, end, workspace)];
+}
+
+BdIt select_bidomain_heur_A(BDLL & domains, Workspace & workspace)
 {
     // Select the bidomain with the smallest max(leftsize, rightsize), breaking
     // ties on the smallest vertex index in the left set
@@ -411,7 +443,7 @@ BdIt select_bidomain_heur_A(BDLL & domains)
         int right_len = bd.r_end - bd.r;
         if (right_len != min_size)
             continue;
-        int tie_breaker = *std::min_element(bd.l, bd.l_end);
+        int tie_breaker = find_best_v_score(bd.l, bd.l_end, workspace);
         if (tie_breaker < min_tie_breaker) {
             min_tie_breaker = tie_breaker;
             best = bd_it;
@@ -420,7 +452,7 @@ BdIt select_bidomain_heur_A(BDLL & domains)
     return best;
 }
 
-BdIt select_bidomain_heur_B(BDLL & domains, const SparseGraph & g0)
+BdIt select_bidomain_heur_B(BDLL & domains, const SparseGraph & g0, Workspace & workspace)
 {
     double best_score = INT_MIN;
     BdIt best = domains.end();
@@ -431,9 +463,10 @@ BdIt select_bidomain_heur_B(BDLL & domains, const SparseGraph & g0)
             // Special case where no branching is required
             return bd_it;
         }
-        int deg = g0.adj_lists[*std::min_element(bd.l, bd.l_end)].size();
+        int best_v = find_best_v(bd.l, bd.l_end, workspace);
+        int deg = g0.adj_lists[best_v].size();
         if (arguments.directed) {
-            deg += g0.in_edge_lists[*std::min_element(bd.l, bd.l_end)].size();
+            deg += g0.in_edge_lists[best_v].size();
         }
         double score = double(deg) / right_len;
         if (score > best_score) {
@@ -444,7 +477,7 @@ BdIt select_bidomain_heur_B(BDLL & domains, const SparseGraph & g0)
     return best;
 }
 
-BdIt select_bidomain_heur_C(BDLL & domains, const SparseGraph & g0, const vector<int> & g0_remaining_deg)
+BdIt select_bidomain_heur_C(BDLL & domains, const SparseGraph & g0, const vector<int> & g0_remaining_deg, Workspace & workspace)
 {
     double best_score = INT_MIN;
     BdIt best = domains.end();
@@ -455,9 +488,7 @@ BdIt select_bidomain_heur_C(BDLL & domains, const SparseGraph & g0, const vector
             // Special case where no branching is required
             return bd_it;
         }
-        //int deg = g0.adj_lists[*std::min_element(bd.l, bd.l_end)].size();
-        //double score = double(deg) / right_len;
-        int remaining_deg = g0_remaining_deg[*std::min_element(bd.l, bd.l_end)];
+        int remaining_deg = g0_remaining_deg[find_best_v(bd.l, bd.l_end, workspace)];
         double score = double(remaining_deg) / right_len;
         if (score > best_score) {
             best_score = score;
@@ -467,14 +498,14 @@ BdIt select_bidomain_heur_C(BDLL & domains, const SparseGraph & g0, const vector
     return best;
 }
 
-BdIt select_bidomain(BDLL & domains, const SparseGraph & g0, const vector<int> & g0_remaining_deg)
+BdIt select_bidomain(BDLL & domains, const SparseGraph & g0, const vector<int> & g0_remaining_deg, Workspace & workspace)
 {
     if (arguments.heuristic == heur_A)
-        return select_bidomain_heur_A(domains);
+        return select_bidomain_heur_A(domains, workspace);
     else if (arguments.heuristic == heur_B)
-        return select_bidomain_heur_B(domains, g0);
+        return select_bidomain_heur_B(domains, g0, workspace);
     else
-        return select_bidomain_heur_C(domains, g0, g0_remaining_deg);
+        return select_bidomain_heur_C(domains, g0, g0_remaining_deg, workspace);
 }
 
 struct SplitAndDeletedLists {
@@ -722,15 +753,24 @@ void solve(Workspace & workspace, const SparseGraph & g0, const SparseGraph & g1
     if (bound < g0.n)
         return;
 
-    BdIt bd_it = select_bidomain(bdll, g0, g0_remaining_deg);
+    BdIt bd_it = select_bidomain(bdll, g0, g0_remaining_deg, workspace);
         
     if (bd_it == bdll.end())
         return;
 
-    std::vector<int> ww(bd_it->r, bd_it->r_end);
+    std::vector<int> ww;
+    ww.reserve(bd_it->r_end - bd_it->r);
+    for (auto it = bd_it->r; it != bd_it->r_end; it++) {
+        // Initially ww contains vertices' positions in the order.  After sorting,
+        // we'll convert these to vertices
+        ww.push_back(workspace.vv1_inverse[*it]);
+    }
     std::sort(ww.begin(), ww.end());
+    for (auto & w : ww) {
+        w = workspace.vv1[w];
+    }
 
-    int v = *std::min_element(bd_it->l, bd_it->l_end);
+    int v = find_best_v(bd_it->l, bd_it->l_end, workspace);
 
     if (arguments.heuristic == heur_C)
         for (int u : g0.adj_lists[v])
@@ -795,7 +835,9 @@ void solve(Workspace & workspace, const SparseGraph & g0, const SparseGraph & g1
 }
 
 // Returns a common subgraph and the number of induced subgraph isomorphisms found
-std::pair<vector<VtxPair>, long long> mcs(SparseGraph & g0, SparseGraph & g1)
+// vv0 and vv1 are vertex orders
+std::pair<vector<VtxPair>, long long> mcs(SparseGraph & g0, SparseGraph & g1,
+        vector<int> & vv0, vector<int> & vv1)
 {
     //for (int i=0; i<g0.n; i++) {
     //    cout << i << "   ";
@@ -827,7 +869,7 @@ std::pair<vector<VtxPair>, long long> mcs(SparseGraph & g0, SparseGraph & g1)
     vector<bool> g1_active_vertices(g1.n);
 
     BDLL bdll;
-    Workspace workspace {};
+    Workspace workspace {vv0, vv1};
 
     std::set<unsigned int> left_labels;
     std::set<unsigned int> right_labels;
@@ -979,18 +1021,9 @@ int main(int argc, char** argv) {
         return g0_dense ? (g1_deg[a]<g1_deg[b]) : (g1_deg[a]>g1_deg[b]);
     });
 
-    struct SparseGraph g0_sorted = induced_subgraph(g0, vv0);
-    struct SparseGraph g1_sorted = induced_subgraph(g1, vv1);
-
-    auto result = mcs(g0_sorted, g1_sorted);
+    auto result = mcs(g0, g1, vv0, vv1);
     vector<VtxPair> solution = result.first;
     long long num_sols = result.second;
-
-    // Convert to indices from original, unsorted graphs
-    for (auto& vtx_pair : solution) {
-        vtx_pair.v = vv0[vtx_pair.v];
-        vtx_pair.w = vv1[vtx_pair.w];
-    }
 
     auto stop = std::chrono::steady_clock::now();
     auto time_elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(stop - start).count();
