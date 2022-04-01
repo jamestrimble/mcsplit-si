@@ -805,9 +805,9 @@ void solve(Workspace & workspace, const SparseGraph & g0, const SparseGraph & g1
                             g0_remaining_deg);
 
                     current.pop_back();
+                    unfilter_domains(workspace, bdll, left_ptrs, right_ptrs,
+                            filter_result2.split_bds_list, filter_result2.deleted_bds_list);
                 }
-                unfilter_domains(workspace, bdll, left_ptrs, right_ptrs,
-                        filter_result2.split_bds_list, filter_result2.deleted_bds_list);
             } else {
                 current.push_back(VtxPair(v, w));
 
