@@ -425,7 +425,7 @@ int find_best_v(It begin, It end, Workspace & workspace)
     return workspace.vv0[find_best_v_score(begin, end, workspace)];
 }
 
-BdIt select_bidomain_heur_A(BDLL & domains, Workspace & workspace)
+int select_branch_v_heur_A(BDLL & domains, Workspace & workspace)
 {
     // Select the bidomain with the smallest max(leftsize, rightsize), breaking
     // ties on the smallest vertex index in the left set
@@ -437,7 +437,7 @@ BdIt select_bidomain_heur_A(BDLL & domains, Workspace & workspace)
             min_size = right_len;
     }
     int min_tie_breaker = INT_MAX;
-    BdIt best = domains.end();
+    int best = -1;
     for (BdIt bd_it=domains.begin(); bd_it!=domains.end(); bd_it=bd_it->next) {
         auto const & bd = *bd_it;
         int right_len = bd.r_end - bd.r;
@@ -446,24 +446,24 @@ BdIt select_bidomain_heur_A(BDLL & domains, Workspace & workspace)
         int tie_breaker = find_best_v_score(bd.l, bd.l_end, workspace);
         if (tie_breaker < min_tie_breaker) {
             min_tie_breaker = tie_breaker;
-            best = bd_it;
+            best = workspace.vv0[tie_breaker];
         }
     }
     return best;
 }
 
-BdIt select_bidomain_heur_B(BDLL & domains, const SparseGraph & g0, Workspace & workspace)
+int select_branch_v_heur_B(BDLL & domains, const SparseGraph & g0, Workspace & workspace)
 {
     double best_score = INT_MIN;
-    BdIt best = domains.end();
+    int best = -1;
     for (BdIt bd_it=domains.begin(); bd_it!=domains.end(); bd_it=bd_it->next) {
         auto const & bd = *bd_it;
+        int best_v = find_best_v(bd.l, bd.l_end, workspace);
         int right_len = bd.r_end - bd.r;
         if (right_len == 1) {
             // Special case where no branching is required
-            return bd_it;
+            return best_v;
         }
-        int best_v = find_best_v(bd.l, bd.l_end, workspace);
         int deg = g0.adj_lists[best_v].size();
         if (arguments.directed) {
             deg += g0.in_edge_lists[best_v].size();
@@ -471,41 +471,42 @@ BdIt select_bidomain_heur_B(BDLL & domains, const SparseGraph & g0, Workspace & 
         double score = double(deg) / right_len;
         if (score > best_score) {
             best_score = score;
-            best = bd_it;
+            best = best_v;
         }
     }
     return best;
 }
 
-BdIt select_bidomain_heur_C(BDLL & domains, const SparseGraph & g0, const vector<int> & g0_remaining_deg, Workspace & workspace)
+int select_branch_v_heur_C(BDLL & domains, const SparseGraph & g0, const vector<int> & g0_remaining_deg, Workspace & workspace)
 {
     double best_score = INT_MIN;
-    BdIt best = domains.end();
+    int best = -1;
     for (BdIt bd_it=domains.begin(); bd_it!=domains.end(); bd_it=bd_it->next) {
         auto const & bd = *bd_it;
+        int best_v = find_best_v(bd.l, bd.l_end, workspace);
         int right_len = bd.r_end - bd.r;
         if (right_len == 1) {
             // Special case where no branching is required
-            return bd_it;
+            return best_v;
         }
-        int remaining_deg = g0_remaining_deg[find_best_v(bd.l, bd.l_end, workspace)];
+        int remaining_deg = g0_remaining_deg[best_v];
         double score = double(remaining_deg) / right_len;
         if (score > best_score) {
             best_score = score;
-            best = bd_it;
+            best = best_v;
         }
     }
     return best;
 }
 
-BdIt select_bidomain(BDLL & domains, const SparseGraph & g0, const vector<int> & g0_remaining_deg, Workspace & workspace)
+int select_branch_v(BDLL & domains, const SparseGraph & g0, const vector<int> & g0_remaining_deg, Workspace & workspace)
 {
     if (arguments.heuristic == heur_A)
-        return select_bidomain_heur_A(domains, workspace);
+        return select_branch_v_heur_A(domains, workspace);
     else if (arguments.heuristic == heur_B)
-        return select_bidomain_heur_B(domains, g0, workspace);
+        return select_branch_v_heur_B(domains, g0, workspace);
     else
-        return select_bidomain_heur_C(domains, g0, g0_remaining_deg, workspace);
+        return select_branch_v_heur_C(domains, g0, g0_remaining_deg, workspace);
 }
 
 struct SplitAndDeletedLists {
@@ -753,10 +754,12 @@ void solve(Workspace & workspace, const SparseGraph & g0, const SparseGraph & g1
     if (bound < g0.n)
         return;
 
-    BdIt bd_it = select_bidomain(bdll, g0, g0_remaining_deg, workspace);
+    int v = select_branch_v(bdll, g0, g0_remaining_deg, workspace);
         
-    if (bd_it == bdll.end())
+    if (v == -1)
         return;
+
+    BdIt bd_it = left_ptrs[v].bd_it;
 
     std::vector<int> ww;
     ww.reserve(bd_it->r_end - bd_it->r);
@@ -769,8 +772,6 @@ void solve(Workspace & workspace, const SparseGraph & g0, const SparseGraph & g1
     for (auto & w : ww) {
         w = workspace.vv1[w];
     }
-
-    int v = find_best_v(bd_it->l, bd_it->l_end, workspace);
 
     if (arguments.heuristic == heur_C)
         for (int u : g0.adj_lists[v])
