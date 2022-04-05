@@ -47,6 +47,7 @@ static struct argp_option options[] = {
     {"labelled", 'a', 0, 0, "Use edge and vertex labels"},
     {"vertex-labelled-only", 'x', 0, 0, "Use vertex labels, but not edge labels"},
     {"timeout", 't', "timeout", 0, "Specify a timeout (seconds)"},
+    {"deg-heur", 'D', "heur", 0, "Degree heuristic (0, 1, or 2)"},
     { 0 }
 };
 
@@ -64,6 +65,7 @@ static struct {
     char *filename1;
     char *filename2;
     int timeout;
+    int deg_heur;
     int arg_num;
 } arguments;
 
@@ -126,6 +128,9 @@ static error_t parse_opt (int key, char *arg, struct argp_state *state) {
             break;
         case 't':
             arguments.timeout = std::stoi(arg);
+            break;
+        case 'D':
+            arguments.deg_heur = std::stoi(arg);
             break;
         case ARGP_KEY_ARG:
             if (arguments.arg_num == 0) {
@@ -597,6 +602,18 @@ int sum(const vector<int> & vec) {
     return std::accumulate(std::begin(vec), std::end(vec), 0);
 }
 
+double calc_density(vector<int> & deg, bool directed)
+{
+    int n = deg.size();
+    long deg_total = 0;
+    for (auto d : deg) {
+        deg_total += d;
+    }
+    return directed ?
+        (double) deg_total / (2 * n * (n-1)) :
+        (double) deg_total / (n * (n-1));
+}
+
 int main(int argc, char** argv) {
     set_default_arguments();
     argp_parse(&argp, argc, argv, 0, 0, 0);
@@ -637,19 +654,25 @@ int main(int argc, char** argv) {
 
     vector<int> g0_deg = calculate_degrees(g0);
     vector<int> g1_deg = calculate_degrees(g1);
+    double g0_density = calc_density(g0_deg, arguments.directed);
+    double g1_density = calc_density(g1_deg, arguments.directed);
+
+    bool reverse_deg_heur = false;
+    if (arguments.deg_heur == 0 && g1_density > 0.5) reverse_deg_heur = true;
+    if (arguments.deg_heur == 1 && g1_density > g0_density) reverse_deg_heur = true;
 
     vector<int> vv0(g0.n);
     std::iota(std::begin(vv0), std::end(vv0), 0);
-    bool g1_dense = sum(g1_deg) * 2 > g1.n*(g1.n-1);
-    std::stable_sort(std::begin(vv0), std::end(vv0), [&](int a, int b) {
-        return g1_dense ? (g0_deg[a]<g0_deg[b]) : (g0_deg[a]>g0_deg[b]);
-    });
     vector<int> vv1(g1.n);
     std::iota(std::begin(vv1), std::end(vv1), 0);
-    bool g0_dense = sum(g0_deg) * 2 > g0.n*(g0.n-1);
-    std::stable_sort(std::begin(vv1), std::end(vv1), [&](int a, int b) {
-        return g0_dense ? (g1_deg[a]<g1_deg[b]) : (g1_deg[a]>g1_deg[b]);
-    });
+
+    if (reverse_deg_heur) {
+        std::stable_sort(std::begin(vv0), std::end(vv0), [&](int a, int b) { return g0_deg[a] < g0_deg[b]; });
+        std::stable_sort(std::begin(vv1), std::end(vv1), [&](int a, int b) { return g1_deg[a] < g1_deg[b]; });
+    } else {
+        std::stable_sort(std::begin(vv0), std::end(vv0), [&](int a, int b) { return g0_deg[a] > g0_deg[b]; });
+        std::stable_sort(std::begin(vv1), std::end(vv1), [&](int a, int b) { return g1_deg[a] > g1_deg[b]; });
+    }
 
     struct Graph g0_sorted = induced_subgraph(g0, vv0);
     struct Graph g1_sorted = induced_subgraph(g1, vv1);
