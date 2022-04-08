@@ -29,7 +29,7 @@ static void fail(std::string msg) {
     exit(1);
 }
 
-enum Heuristic { heur_A, heur_B, heur_C };
+enum Heuristic { heur_A, heur_B, heur_C, heur_RI };
 
 /*******************************************************************************
                              Command-line arguments
@@ -139,8 +139,10 @@ static error_t parse_opt (int key, char *arg, struct argp_state *state) {
                     arguments.heuristic = heur_B;
                 else if (std::string(arg) == "C")
                     arguments.heuristic = heur_C;
+                else if (std::string(arg) == "RI")
+                    arguments.heuristic = heur_RI;
                 else
-                    fail("Unknown heuristic (try A, B or C)");
+                    fail("Unknown heuristic (try A, B, C, or RI)");
             } else if (arguments.arg_num == 1) {
                 arguments.filename1 = arg;
             } else if (arguments.arg_num == 2) {
@@ -327,7 +329,9 @@ struct Workspace {
     vector<int> vv1;
     vector<int> vv0_inverse;
     vector<int> vv1_inverse;
-    Workspace(vector<int> & vv0, vector<int> & vv1) : vv0(vv0), vv1(vv1), vv0_inverse(vv0.size()), vv1_inverse(vv1.size())
+    vector<int> order;
+    Workspace(vector<int> & vv0, vector<int> & vv1, vector<int> order) :
+            vv0(vv0), vv1(vv1), vv0_inverse(vv0.size()), vv1_inverse(vv1.size()), order(order)
     {
         for (unsigned i=0; i<vv0.size(); i++) {
             vv0_inverse[vv0[i]] = i;
@@ -504,14 +508,17 @@ int select_branch_v_heur_C(BDLL & domains, const SparseGraph & g0, const vector<
     return best;
 }
 
-int select_branch_v(BDLL & domains, const SparseGraph & g0, const vector<int> & g0_remaining_deg, Workspace & workspace)
+int select_branch_v(BDLL & domains, const SparseGraph & g0, const vector<int> & g0_remaining_deg,
+        Workspace & workspace, int current_len)
 {
     if (arguments.heuristic == heur_A)
         return select_branch_v_heur_A(domains, workspace);
     else if (arguments.heuristic == heur_B)
         return select_branch_v_heur_B(domains, g0, workspace);
-    else
+    else if (arguments.heuristic == heur_C)
         return select_branch_v_heur_C(domains, g0, g0_remaining_deg, workspace);
+    else
+        return workspace.order[current_len];
 }
 
 struct SplitAndDeletedLists {
@@ -759,7 +766,7 @@ void solve(Workspace & workspace, const SparseGraph & g0, const SparseGraph & g1
     if (bound < g0.n)
         return;
 
-    int v = select_branch_v(bdll, g0, g0_remaining_deg, workspace);
+    int v = select_branch_v(bdll, g0, g0_remaining_deg, workspace, current.size());
         
     if (v == -1)
         return;
@@ -840,9 +847,68 @@ void solve(Workspace & workspace, const SparseGraph & g0, const SparseGraph & g1
             ++g0_remaining_deg[u];
 }
 
+vector<int> get_RI_style_static_order(const SparseGraph & g0, double g1_density)
+{
+    bool g1_is_dense = g1_density > 0.5;
+
+    vector<int> order;
+    order.reserve(g0.n);
+
+    // Set 0 is vertices that are in the order
+    // Set 1 is vertices adjacent to those in set 0
+    // Set 2 is other vertices
+    vector<int> vtx_to_set(g0.n, 2);
+
+    vector<vector<int>> scores(g0.n, {0,0,0});
+    for (int i=0; i<g0.n; i++) {
+        scores[i][2] = g0.adj_lists[i].size();
+    }
+    for (int i=0; i<g0.n; i++) {
+        int v = -1;
+        if (g1_is_dense) {
+            vector<int> best_score = {INT_MAX, INT_MAX, INT_MAX};
+            for (int j=0; j<g0.n; j++) {
+                if (vtx_to_set[j] != 0 && scores[j] < best_score) {
+                    best_score = scores[j];
+                    v = j;
+                }
+            }
+        } else {
+            vector<int> best_score = {-1,-1,-1};
+            for (int j=0; j<g0.n; j++) {
+                if (vtx_to_set[j] != 0 && scores[j] > best_score) {
+                    best_score = scores[j];
+                    v = j;
+                }
+            }
+        }
+        order.push_back(v);
+//        cout << order.back() << " ";
+        int prev_set_of_v = vtx_to_set[v];
+        vtx_to_set[v] = 0;
+        for (int w : g0.adj_lists[v]) {
+            --scores[w][prev_set_of_v];
+            ++scores[w][0];
+            if (vtx_to_set[w] == 2) {
+                vtx_to_set[w] = 1;
+                for (int u : g0.adj_lists[w]) {
+                    --scores[u][2];
+                    ++scores[u][1];
+                }
+            }
+        }
+    }
+//    cout << endl;
+//    for (int i=0; i<g0.n; i++) {
+//        for (int x : scores[i]) cout << x << " ";
+//        cout << endl;
+//    }
+    return order;
+}
+
 // Returns a common subgraph and the number of induced subgraph isomorphisms found
 // vv0 and vv1 are vertex orders
-std::pair<vector<VtxPair>, long long> mcs(SparseGraph & g0, SparseGraph & g1,
+std::pair<vector<VtxPair>, long long> mcs(SparseGraph & g0, SparseGraph & g1, double g1_density,
         vector<int> & vv0, vector<int> & vv1)
 {
     //for (int i=0; i<g0.n; i++) {
@@ -875,7 +941,12 @@ std::pair<vector<VtxPair>, long long> mcs(SparseGraph & g0, SparseGraph & g1,
     vector<bool> g1_active_vertices(g1.n);
 
     BDLL bdll;
-    Workspace workspace {vv0, vv1};
+
+    vector<int> order;
+    if (arguments.heuristic == heur_RI) {
+        order = get_RI_style_static_order(g0, g1_density);
+    }
+    Workspace workspace {vv0, vv1, order};
 
     std::set<unsigned int> left_labels;
     std::set<unsigned int> right_labels;
@@ -985,7 +1056,7 @@ double calc_density(vector<int> & deg, bool directed)
 int main(int argc, char** argv) {
     set_default_arguments();
     argp_parse(&argp, argc, argv, 0, 0, 0);
-    if (arguments.directed && arguments.heuristic == heur_C)
+    if (arguments.directed && (arguments.heuristic == heur_C || arguments.heuristic == heur_RI))
         return 1;
 
     char format = arguments.dimacs ? 'D' : arguments.lad ? 'L' : arguments.gfd ? 'G' :
@@ -1044,7 +1115,7 @@ int main(int argc, char** argv) {
         std::stable_sort(std::begin(vv1), std::end(vv1), [&](int a, int b) { return g1_deg[a] > g1_deg[b]; });
     }
 
-    auto result = mcs(g0, g1, vv0, vv1);
+    auto result = mcs(g0, g1, g1_density, vv0, vv1);
     vector<VtxPair> solution = result.first;
     long long num_sols = result.second;
 
