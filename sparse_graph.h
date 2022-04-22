@@ -20,5 +20,3 @@ struct SparseGraph {
 SparseGraph induced_subgraph(struct SparseGraph& g, std::vector<int> vv);
 
 SparseGraph readGraph(char* filename, char format, bool directed, bool edge_labelled, bool vertex_labelled);
-
-void filter_adj_lists(SparseGraph & g, const std::vector<bool> & active_vertices);

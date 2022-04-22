@@ -427,10 +427,10 @@ void show(const vector<Ptrs> & left_ptrs, const vector<Ptrs> & right_ptrs,
     cout << std::endl;
     if (!current.empty() > 0) {
         std::cout << "Adjacent to " << current.back().v << " in g0: ";
-        for (int x : g0.filtered_adj_lists[current.back().v]) std::cout << x << " ";
+        for (int x : g0.adj_lists[current.back().v]) std::cout << x << " ";
         std::cout << std::endl;
         std::cout << "Adjacent to " << current.back().w << " in g1: ";
-        for (int x : g1.filtered_adj_lists[current.back().w]) std::cout << x << " ";
+        for (int x : g1.adj_lists[current.back().w]) std::cout << x << " ";
         std::cout << std::endl;
     }
     cout << "---------------------" << std::endl;
@@ -1004,19 +1004,13 @@ std::pair<vector<VtxPair>, long long> mcs(SparseGraph & g0, SparseGraph & g1, do
         right_ptrs[i].v = i;
     }
 
-    std::set<unsigned int> left_labels;
-    std::set<unsigned int> right_labels;
-    for (unsigned int label : g0.label) left_labels.insert(label);
-    for (unsigned int label : g1.label) right_labels.insert(label);
-    std::set<unsigned int> labels;  // labels that appear in both graphs
-    std::set_intersection(std::begin(left_labels),
-                          std::end(left_labels),
-                          std::begin(right_labels),
-                          std::end(right_labels),
-                          std::inserter(labels, std::begin(labels)));
+    std::vector<unsigned int> left_labels(g0.label.begin(), g0.label.end());
+    // sort and deduplicate
+    std::sort( left_labels.begin(), left_labels.end() );
+    left_labels.erase( std::unique( left_labels.begin(), left_labels.end() ), left_labels.end() );
 
-    // Create a bidomain for each label that appears in both graphs
-    for (unsigned int label : labels) {
+    // Create a bidomain for each label that appears in the pattern graph
+    for (unsigned int label : left_labels) {
         int start_l = left.size();
         int start_r = right.size();
 
@@ -1067,9 +1061,6 @@ std::pair<vector<VtxPair>, long long> mcs(SparseGraph & g0, SparseGraph & g1, do
             }
         }
     }
-
-    filter_adj_lists(g0, g0_active_vertices);
-    filter_adj_lists(g1, g1_active_vertices);
 
     vector<VtxPair> incumbent;
     vector<VtxPair> current;

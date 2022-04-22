@@ -217,14 +217,3 @@ struct SparseGraph readGraph(char* filename, char format, bool directed, bool ed
     else fail("Unknown graph format\n");
     return g;
 }
-
-void filter_adj_lists(SparseGraph & g, const std::vector<bool> & active_vertices) {
-    g.filtered_adj_lists = std::vector<std::vector<int>>(g.n);
-    for (int v=0; v<g.n; v++) {
-        for (int w : g.adj_lists[v]) {
-            if (active_vertices[w]) {
-                g.filtered_adj_lists[v].push_back(w);
-            }
-        }
-    }
-}
