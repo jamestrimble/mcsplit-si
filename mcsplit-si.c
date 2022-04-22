@@ -935,9 +935,6 @@ std::pair<vector<VtxPair>, long long> mcs(SparseGraph & g0, SparseGraph & g1, do
     vector<Ptrs> left_ptrs(g0.n);
     vector<Ptrs> right_ptrs(g1.n);
 
-    vector<bool> g0_active_vertices(g0.n);
-    vector<bool> g1_active_vertices(g1.n);
-
     BDLL bdll;
 
     vector<int> order;
@@ -953,14 +950,18 @@ std::pair<vector<VtxPair>, long long> mcs(SparseGraph & g0, SparseGraph & g1, do
 
     // Create a bidomain for each label that appears in the pattern graph
     for (unsigned int label : left_labels) {
-        int start_l = left.size();
-        int start_r = right.size();
+        int left_len = 0;
+        int right_len = 0;
+
+        NewBidomain *new_elem = workspace.get_from_free_list();
+        new_elem->insert_before(&bdll.head);
 
         for (int i=0; i<g0.n; i++) {
             if (g0.label[i]==label) {
                 left.push_back(i);
                 left_ptrs[i].vtx_it = std::prev(left.end());
-                g0_active_vertices[i] = true;
+                left_ptrs[i].bd_it = new_elem;
+                ++left_len;
             }
         }
         for (int i=0; i<g1.n; i++) {
@@ -968,34 +969,19 @@ std::pair<vector<VtxPair>, long long> mcs(SparseGraph & g0, SparseGraph & g1, do
                 right.push_back(i);
                 right_ptrs[i].vtx_it = std::prev(right.end());
                 //cout << *right_ptrs[i].vtx_it << endl;
-                g1_active_vertices[i] = true;
+                right_ptrs[i].bd_it = new_elem;
+                ++right_len;
             }
         }
-
-        int left_len = left.size() - start_l;
-        int right_len = right.size() - start_r;
 
         if (left_len > right_len) {
             return {{}, 0};
         }
 
-        NewBidomain *new_elem = workspace.get_from_free_list();
-        new_elem->insert_before(&bdll.head);
-        new_elem->initialise(left.begin() + start_l,
-                          right.begin() + start_r,
-                          left.begin() + start_l + left_len,
-                          right.begin() + start_r + right_len);
-
-        for (int i=0; i<g0.n; i++) {
-            if (g0.label[i]==label) {
-                left_ptrs[i].bd_it = &bdll.back();
-            }
-        }
-        for (int i=0; i<g1.n; i++) {
-            if (g1.label[i]==label) {
-                right_ptrs[i].bd_it = &bdll.back();
-            }
-        }
+        new_elem->initialise(left.end() - left_len,
+                             right.end() - right_len,
+                             left.end(),
+                             right.end());
     }
 
     vector<VtxPair> incumbent;

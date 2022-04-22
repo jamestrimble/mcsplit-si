@@ -969,16 +969,8 @@ std::pair<vector<VtxPair>, long long> mcs(SparseGraph & g0, SparseGraph & g1, do
     //    cout << endl;
     //}
     //cout << endl;
-    vector<int> left;  // the buffer of vertex indices for the left partitions
-    vector<int> right;  // the buffer of vertex indices for the right partitions
-    left.reserve(g0.n);
-    right.reserve(g1.n);
-
     vector<Ptrs> left_ptrs(g0.n);
     vector<Ptrs> right_ptrs(g1.n);
-
-    vector<bool> g0_active_vertices(g0.n);
-    vector<bool> g1_active_vertices(g1.n);
 
     BDLL bdll;
 
@@ -1009,52 +1001,27 @@ std::pair<vector<VtxPair>, long long> mcs(SparseGraph & g0, SparseGraph & g1, do
 
     // Create a bidomain for each label that appears in the pattern graph
     for (unsigned int label : left_labels) {
-        int start_l = left.size();
-        int start_r = right.size();
-
-        for (int i : vv0) {
-            if (g0.label[i]==label) {
-                left.push_back(i);
-                g0_active_vertices[i] = true;
-            }
-        }
-        for (int i : vv1) {
-            if (g1.label[i]==label) {
-                right.push_back(i);
-                g1_active_vertices[i] = true;
-            }
-        }
-
-        int left_len = left.size() - start_l;
-        int right_len = right.size() - start_r;
-
-        if (left_len > right_len) {
-            return {{}, 0};
-        }
-
         NewBidomain *new_elem = workspace.get_from_free_list();
         new_elem->insert_before(&bdll.head);
         new_elem->initialise();
 
-        for (It it=left.begin() + start_l; it!=left.begin() + start_l + left_len; it++) {
-            int v = *it;
-            new_elem->left_ll.append_vtx(&left_ptrs[v]);
+        for (int i : vv0) {
+            if (g0.label[i]==label) {
+                new_elem->left_ll.append_vtx(&left_ptrs[i]);
+                left_ptrs[i].bd_it = new_elem;
+            }
         }
-        for (It it=right.begin() + start_r; it!=right.begin() + start_r + right_len; it++) {
-            int v = *it;
-            new_elem->right_ll.append_vtx(&right_ptrs[v]);
+        for (int i : vv1) {
+            if (g1.label[i]==label) {
+                new_elem->right_ll.append_vtx(&right_ptrs[i]);
+                right_ptrs[i].bd_it = new_elem;
+            }
         }
 
-        // TODO: make the following more efficient (don't loop over all vertices in the graphs)
-        for (int i=0; i<g0.n; i++) {
-            if (g0.label[i]==label) {
-                left_ptrs[i].bd_it = &bdll.back();
-            }
-        }
-        for (int i=0; i<g1.n; i++) {
-            if (g1.label[i]==label) {
-                right_ptrs[i].bd_it = &bdll.back();
-            }
+        int left_len = new_elem->left_ll.size;
+        int right_len = new_elem->right_ll.size;
+        if (left_len > right_len) {
+            return {{}, 0};
         }
     }
 
