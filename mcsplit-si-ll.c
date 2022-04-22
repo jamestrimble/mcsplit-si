@@ -971,10 +971,8 @@ std::pair<vector<VtxPair>, long long> mcs(SparseGraph & g0, SparseGraph & g1, do
     //cout << endl;
     vector<int> left;  // the buffer of vertex indices for the left partitions
     vector<int> right;  // the buffer of vertex indices for the right partitions
-    vector<int> new_left;
-    vector<int> new_right;
-    new_left.reserve(g0.n);
-    new_right.reserve(g1.n);
+    left.reserve(g0.n);
+    right.reserve(g1.n);
 
     vector<Ptrs> left_ptrs(g0.n);
     vector<Ptrs> right_ptrs(g1.n);
@@ -1016,14 +1014,12 @@ std::pair<vector<VtxPair>, long long> mcs(SparseGraph & g0, SparseGraph & g1, do
 
         for (int i : vv0) {
             if (g0.label[i]==label) {
-                new_left.push_back(i);
                 left.push_back(i);
                 g0_active_vertices[i] = true;
             }
         }
         for (int i : vv1) {
             if (g1.label[i]==label) {
-                new_right.push_back(i);
                 right.push_back(i);
                 g1_active_vertices[i] = true;
             }
@@ -1040,11 +1036,11 @@ std::pair<vector<VtxPair>, long long> mcs(SparseGraph & g0, SparseGraph & g1, do
         new_elem->insert_before(&bdll.head);
         new_elem->initialise();
 
-        for (It it=new_left.begin() + start_l; it!=new_left.begin() + start_l + left_len; it++) {
+        for (It it=left.begin() + start_l; it!=left.begin() + start_l + left_len; it++) {
             int v = *it;
             new_elem->left_ll.append_vtx(&left_ptrs[v]);
         }
-        for (It it=new_right.begin() + start_r; it!=new_right.begin() + start_r + right_len; it++) {
+        for (It it=right.begin() + start_r; it!=right.begin() + start_r + right_len; it++) {
             int v = *it;
             new_elem->right_ll.append_vtx(&right_ptrs[v]);
         }

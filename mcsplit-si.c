@@ -929,10 +929,8 @@ std::pair<vector<VtxPair>, long long> mcs(SparseGraph & g0, SparseGraph & g1, do
     //cout << endl;
     vector<int> left;  // the buffer of vertex indices for the left partitions
     vector<int> right;  // the buffer of vertex indices for the right partitions
-    vector<int> new_left;
-    vector<int> new_right;
-    new_left.reserve(g0.n);
-    new_right.reserve(g1.n);
+    left.reserve(g0.n);
+    right.reserve(g1.n);
 
     vector<Ptrs> left_ptrs(g0.n);
     vector<Ptrs> right_ptrs(g1.n);
@@ -960,17 +958,15 @@ std::pair<vector<VtxPair>, long long> mcs(SparseGraph & g0, SparseGraph & g1, do
 
         for (int i=0; i<g0.n; i++) {
             if (g0.label[i]==label) {
-                new_left.push_back(i);
                 left.push_back(i);
-                left_ptrs[i].vtx_it = std::prev(new_left.end());
+                left_ptrs[i].vtx_it = std::prev(left.end());
                 g0_active_vertices[i] = true;
             }
         }
         for (int i=0; i<g1.n; i++) {
             if (g1.label[i]==label) {
-                new_right.push_back(i);
                 right.push_back(i);
-                right_ptrs[i].vtx_it = std::prev(new_right.end());
+                right_ptrs[i].vtx_it = std::prev(right.end());
                 //cout << *right_ptrs[i].vtx_it << endl;
                 g1_active_vertices[i] = true;
             }
@@ -985,10 +981,10 @@ std::pair<vector<VtxPair>, long long> mcs(SparseGraph & g0, SparseGraph & g1, do
 
         NewBidomain *new_elem = workspace.get_from_free_list();
         new_elem->insert_before(&bdll.head);
-        new_elem->initialise(new_left.begin() + start_l,
-                          new_right.begin() + start_r,
-                          new_left.begin() + start_l + left_len,
-                          new_right.begin() + start_r + right_len);
+        new_elem->initialise(left.begin() + start_l,
+                          right.begin() + start_r,
+                          left.begin() + start_l + left_len,
+                          right.begin() + start_r + right_len);
 
         for (int i=0; i<g0.n; i++) {
             if (g0.label[i]==label) {
