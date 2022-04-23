@@ -351,7 +351,6 @@ struct BDLL {
 struct ReplacementDatum {
     Ptrs *item;
     Ptrs *location;
-    LL *ll;
 };
 
 // Some temporary storage space
@@ -634,7 +633,7 @@ NewBidomain * do_splits(Workspace & workspace, vector<BdIt> & split_bds,
         Ptrs * restore_location = bd.left_ll.remove_vtx(u_ptrs);
         bd.next->left_ll.append_vtx(u_ptrs);
         u_ptrs->bd_it = bd.next;
-        g0_restore_locations.push_back({u_ptrs, restore_location, &bd.left_ll});
+        g0_restore_locations.push_back({u_ptrs, restore_location});
     }
 
     for (int u : workspace.right_swap_vv) {
@@ -643,7 +642,7 @@ NewBidomain * do_splits(Workspace & workspace, vector<BdIt> & split_bds,
         Ptrs * restore_location = bd.right_ll.remove_vtx(u_ptrs);
         bd.next->right_ll.append_vtx(u_ptrs);
         u_ptrs->bd_it = bd.next;
-        g1_restore_locations.push_back({u_ptrs, restore_location, &bd.right_ll});
+        g1_restore_locations.push_back({u_ptrs, restore_location});
     }
 
     return split_bds_list;
@@ -729,15 +728,17 @@ void unfilter_domains(
 
     while (!g0_restore_locations.empty()) {
         ReplacementDatum & rd = g0_restore_locations.back();
-        rd.ll->insert_vtx(rd.item, rd.location);
-        rd.item->bd_it = rd.item->bd_it->prev;
+        BdIt bd_it = rd.item->bd_it->prev;
+        bd_it->left_ll.insert_vtx(rd.item, rd.location);
+        rd.item->bd_it = bd_it;
         g0_restore_locations.pop_back();
     }
 
     while (!g1_restore_locations.empty()) {
         ReplacementDatum & rd = g1_restore_locations.back();
-        rd.ll->insert_vtx(rd.item, rd.location);
-        rd.item->bd_it = rd.item->bd_it->prev;
+        BdIt bd_it = rd.item->bd_it->prev;
+        bd_it->right_ll.insert_vtx(rd.item, rd.location);
+        rd.item->bd_it = bd_it;
         g1_restore_locations.pop_back();
     }
 
