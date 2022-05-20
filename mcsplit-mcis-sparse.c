@@ -430,19 +430,14 @@ int select_branch_v_heur_A(BDLL & domains, Workspace & workspace)
 
 int select_branch_v_heur_B(BDLL & domains, const SparseGraph & g0, Workspace & workspace)
 {
-    throw 1;
     double best_score = INT_MIN;
     int best = -1;
     for (BdIt bd_it=domains.begin(); bd_it!=domains.end(); bd_it=bd_it->next) {
         auto const & bd = *bd_it;
         int best_v = find_best_v(bd.l, bd.l_end, workspace);
-        int right_len = bd.r_end - bd.r;
-        if (right_len == 1) {
-            // Special case where no branching is required
-            return best_v;
-        }
+        int size = std::max(bd.l_size(), bd.r_size());
         int deg = g0.adj_lists[best_v].size();
-        double score = double(deg) / right_len;
+        double score = double(deg) / size;
         if (score > best_score) {
             best_score = score;
             best = best_v;
@@ -739,12 +734,7 @@ void solve(Workspace & workspace, const SparseGraph & g0, const SparseGraph & g1
     if (arguments.verbose) show(left_ptrs, right_ptrs, g0, g1, current, bdll);
     nodes++;
 
-    if (current.size() > incumbent.size()) {
-        incumbent = current;
-        //if (!arguments.quiet) cout << "Incumbent size: " << incumbent.size() << endl;
-    }
-
-    if (current.size()==matching_size_goal) {
+    if (incumbent.size()==matching_size_goal) {
         solution_count++;
         return;
     }
@@ -771,6 +761,10 @@ void solve(Workspace & workspace, const SparseGraph & g0, const SparseGraph & g1
     // Try assigning v to each vertex w in the colour class beginning at bd.r, in turn
     for (int w : ww) {
         assign(v, w, left_ptrs, right_ptrs);
+        current.push_back(VtxPair(v, w));
+        if (current.size() > incumbent.size()) {
+            incumbent = current;
+        }
 
         bool removed_bd = bd_it->l_size() == 0 || bd_it->r_size() == 0;
         if (removed_bd) {
@@ -782,12 +776,9 @@ void solve(Workspace & workspace, const SparseGraph & g0, const SparseGraph & g1
                 bdll, left_ptrs, right_ptrs, g0.adj_lists, g1.adj_lists, v, w, matching_size_goal, bound);
 
         if (!filter_result.quit_early) {
-            current.push_back(VtxPair(v, w));
-
             solve(workspace, g0, g1, incumbent, current, bdll, left_ptrs, right_ptrs, solution_count,
                     g0_remaining_deg, matching_size_goal, filter_result.new_bound);
 
-            current.pop_back();
             unfilter_domains(workspace, bdll, left_ptrs, right_ptrs,
                     filter_result.split_bds_list, filter_result.deleted_bds_list);
         }
@@ -796,10 +787,11 @@ void solve(Workspace & workspace, const SparseGraph & g0, const SparseGraph & g1
             bd_it->active = true;
             bd_it->reinsert();
         }
+        current.pop_back();
         unassign(v, w, bd_it, left_ptrs, right_ptrs);
 
         if (incumbent.size()==matching_size_goal)
-            break;
+            return;
     }
 
     {
@@ -967,9 +959,7 @@ vector<VtxPair> mcs(SparseGraph & g0, SparseGraph & g1, double g1_density,
     }
 
     vector<VtxPair> incumbent;
-    for (int matching_size_goal = g1.n; matching_size_goal >= 0; matching_size_goal--) {
-        if (int(incumbent.size()) == matching_size_goal)
-            return incumbent;
+    for (int matching_size_goal = bound; matching_size_goal >= 0; matching_size_goal--) {
         vector<VtxPair> current;
         long long solution_count = 0;
         vector<int> g0_remaining_deg {};  // used for heur_C
