@@ -472,15 +472,6 @@ bool check_sol(const SparseGraph & g0, const SparseGraph & g1 , const vector<Vtx
     return true;
 }
 
-int calc_bound(Workspace & workspace, BDLL & bdll, const SparseGraph & g0, const SparseGraph & g1, int target)
-{
-    int bound = 0;
-    for (BdIt bd_it=bdll.begin(); bd_it!=bdll.end(); bd_it=bd_it->next) {
-        bound += std::min(bd_it->l_size(), bd_it->r_size());
-    }
-    return bound;
-}
-
 int select_branch_v_heur_A(BDLL & domains, Workspace & workspace)
 {
     // Select the bidomain with the smallest max(leftsize, rightsize), breaking
@@ -796,11 +787,6 @@ void solve(Workspace & workspace, const SparseGraph & g0, const SparseGraph & g1
     }
 
     if (!arguments.enumerate && incumbent.size()==(unsigned)g0.n)
-        return;
-
-    // TODO: don't calculate bound explicitly? Just ensure rightlen >= leftlen for each BD
-    int bound = current.size() + calc_bound(workspace, bdll, g0, g1, g0.n - current.size());
-    if (bound < g0.n)
         return;
 
     int v = select_branch_v(bdll, g0, g0_remaining_deg, workspace, current.size());

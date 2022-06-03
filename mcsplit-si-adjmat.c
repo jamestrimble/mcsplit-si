@@ -233,16 +233,6 @@ bool check_sol(const Graph & g0, const Graph & g1 , const vector<VtxPair> & solu
     return true;
 }
 
-int calc_bound(const vector<Bidomain>& domains, vector<int> & left,
-        vector<int> & right, const Graph & g0, const Graph & g1, int target)
-{
-    int bound = 0;
-    for (const Bidomain &bd : domains) {
-        bound += std::min(bd.left_len, bd.right_len);
-    }
-    return bound;
-}
-
 int find_min_value(const vector<int>& arr, int start_idx, int len) {
     int min_v = INT_MAX;
     for (int i=0; i<len; i++)
@@ -499,11 +489,6 @@ void solve(const Graph & g0, const Graph & g1,
     }
 
     if (!arguments.enumerate && incumbent.size()==(unsigned)g0.n)
-        return;
-
-    int bound = current.size() + calc_bound(
-            domains, left, right, g0, g1, g0.n - current.size());
-    if (bound < g0.n)
         return;
 
     int bd_idx = select_bidomain(domains, left, g0_deg);
